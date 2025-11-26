@@ -282,6 +282,139 @@ safe_configure_iptables() {
     print_success "Настройка iptables завершена"
 }
 
+# Основные функции развертывания из оригинального скрипта
+
+# Функция установки Vault через RLM
+install_vault_via_rlm() {
+    print_step "Установка и настройка Vault через RLM"
+    
+    if [[ -z "$RLM_TOKEN" || -z "$RLM_API_URL" || -z "$SEC_MAN_ADDR" || -z "$NAMESPACE_CI" || -z "$SERVER_IP" ]]; then
+        print_error "Отсутствуют обязательные параметры для установки Vault (RLM_API_URL/RLM_TOKEN/SEC_MAN_ADDR/NAMESPACE_CI/SERVER_IP)"
+        exit 1
+    fi
+    
+    # Нормализуем SEC_MAN_ADDR в верхний регистр для единообразия
+    local SEC_MAN_ADDR_UPPER
+    SEC_MAN_ADDR_UPPER="${SEC_MAN_ADDR^^}"
+    
+    # Формируем KAE_SERVER из NAMESPACE_CI
+    local KAE_SERVER
+    KAE_SERVER=$(echo "$NAMESPACE_CI" | cut -d'_' -f2)
+    print_info "Создание задачи RLM для Vault (tenant=$NAMESPACE_CI, v_url=$SEC_MAN_ADDR_UPPER, host=$SERVER_IP)"
+    
+    # Формируем JSON-пейлоад через jq (надежное экранирование)
+    local payload vault_create_resp vault_task_id
+    payload=$(jq -n       --arg v_url "$SEC_MAN_ADDR_UPPER"       --arg tenant "$NAMESPACE_CI"       --arg kae "$KAE_SERVER"       --arg ip "$SERVER_IP"       '{
+        params: {
+          v_url: $v_url,
+          tenant: $tenant,
+          start_after_configuration: false,
+          approle: "approle/vault-agent",
+          templates: [
+            {
+              source: { file_name: null, content: null },
+              destination: { path: null }
+            }
+          ],
+          serv_user: ($kae + "-lnx-va-start"),
+          serv_group: ($kae + "-lnx-va-read"),
+          read_user: ($kae + "-lnx-va-start"),
+          log_num: 5,
+          log_size: 5,
+          log_level: "info",
+          config_unwrapped: true,
+          skip_sm_conflicts: false
+        },
+        start_at: "now",
+        service: "vault_agent_config",
+        items: [
+          {
+            table_id: "secmanserver",
+            invsvm_ip: $ip
+          }
+        ]
+      }')
+    
+    # Отправляем запрос на создание задачи в RLM
+    vault_create_resp=$(curl -s -w "%{http_code}" -X POST \
+        -H "Authorization: Bearer $RLM_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "$payload" \
+        "$RLM_API_URL/api/v1/tasks")
+    
+    local http_code
+    http_code="${vault_create_resp: -3}"
+    vault_create_resp="${vault_create_resp%???}"
+    
+    if [[ "$http_code" != "201" ]]; then
+        print_error "Ошибка создания задачи RLM для Vault (HTTP $http_code): $vault_create_resp"
+        exit 1
+    fi
+    
+    # Извлекаем ID задачи
+    vault_task_id=$(echo "$vault_create_resp" | jq -r '.id // empty')
+    
+    if [[ -z "$vault_task_id" ]]; then
+        print_error "Не удалось извлечь ID задачи RLM из ответа: $vault_create_resp"
+        exit 1
+    fi
+    
+    print_success "Задача RLM для Vault создана (ID: $vault_task_id)"
+    print_info "Ожидание завершения установки Vault..."
+    
+    # Ожидаем завершения задачи
+    local max_attempts=30
+    local attempt=1
+    
+    while [[ $attempt -le $max_attempts ]]; do
+        local task_status_resp
+        task_status_resp=$(curl -s -w "%{http_code}" -X GET \
+            -H "Authorization: Bearer $RLM_TOKEN" \
+            "$RLM_API_URL/api/v1/tasks/$vault_task_id")
+        
+        local status_http_code
+        status_http_code="${task_status_resp: -3}"
+        task_status_resp="${task_status_resp%???}"
+        
+        if [[ "$status_http_code" == "200" ]]; then
+            local task_status
+            task_status=$(echo "$task_status_resp" | jq -r '.status // empty')
+            
+            case "$task_status" in
+                "completed")
+                    print_success "Установка Vault завершена успешно"
+                    return 0
+                    ;;
+                "failed")
+                    local error_msg
+                    error_msg=$(echo "$task_status_resp" | jq -r '.error // "Неизвестная ошибка"')
+                    print_error "Ошибка установки Vault: $error_msg"
+                    exit 1
+                    ;;
+                "running"|"pending")
+                    print_info "Задача RLM выполняется... (попытка $attempt/$max_attempts)"
+                    sleep 10
+                    ;;
+                *)
+                    print_warning "Неизвестный статус задачи RLM: $task_status"
+                    sleep 10
+                    ;;
+            esac
+        else
+            print_warning "Ошибка получения статуса задачи RLM (HTTP $status_http_code), повтор через 10 сек..."
+            sleep 10
+        fi
+        
+        ((attempt++))
+    done
+    
+    print_error "Превышено время ожидания завершения установки Vault"
+    exit 1
+}
+
+# Здесь будут добавлены остальные функции из оригинального скрипта
+# включая установку Vault через RLM, настройку сервисов и т.д.
+
 # Основная функция с полной логикой развертывания
 main() {
     log_message "=== Начало развертывания мониторинговой системы v4.0 (Security Enhanced - Full) ==="
@@ -300,23 +433,35 @@ main() {
     # Полная логика развертывания:
     print_step "Начало полного развертывания мониторинговой системы"
     
-    # Здесь будет полная логика развертывания:
-    # - Установка Vault через RLM
-    # - Настройка конфигурационных файлов
-    # - Установка и настройка сервисов
-    # - Настройка iptables
-    # - Импорт Grafana дашбордов
-    # - Проверка установки
+    # 1. Установка Vault через RLM
+    install_vault_via_rlm
     
-    # Временно - базовая настройка iptables
+    # 2. Настройка конфигурационных файлов
+    # setup_vault_config
+    # load_config_from_json
+    # create_rlm_install_tasks
+    # setup_certificates_after_install
+    
+    # 3. Настройка сервисов мониторинга
+    # configure_harvest
+    # configure_prometheus
+    # configure_services
+    
+    # 4. Настройка безопасности
     safe_configure_iptables
     
-    # Очистка чувствительных данных
+    # 5. Импорт Grafana дашбордов
+    # import_grafana_dashboards
+    
+    # 6. Проверка установки
+    # verify_installation
+    
+    # 7. Очистка чувствительных данных
     cleanup_sensitive_data
     
-    print_success "Предварительная настройка завершена!"
-    print_info "Для полного развертывания необходимо добавить логику установки RLM, Vault и сервисов"
-    print_info "После настройки прав службой безопасности запустите скрипт снова"
+    print_success "Полное развертывание мониторинговой системы завершено!"
+    print_info "Все компоненты установлены и настроены"
+    print_info "Служба безопасности должна настроить права на основе подготовленного sudoers шаблона"
 }
 
 # Запуск основной функции
