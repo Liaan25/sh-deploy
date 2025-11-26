@@ -108,7 +108,7 @@ pipeline {
                         sh '''
                             # Клонируем репозиторий
                             GIT_SSH_COMMAND="ssh -i $BITBUCKET_SSH_KEY -o StrictHostKeyChecking=no" \
-                            git clone ssh://git@stash.delta.sbrf.ru:7999/infranas/deploy-monitoring.git monitoring-deployment
+                            git clone ssh://git@stash.delta.sbrf.ru:7999/infranas/deploy-mon-sh.git monitoring-deployment
                             
                             # Проверяем что репозиторий склонирован
                             test -d monitoring-deployment && test -f monitoring-deployment/scripts/deploy_monitoring.sh

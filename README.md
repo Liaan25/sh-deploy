@@ -72,6 +72,7 @@ chmod +x scripts/validation/*.sh
 - Использовать обновленный `Jenkinsfile` из проекта
 - Настроить параметры pipeline согласно требованиям
 - Убедиться что credentials настроены правильно
+- **URL репозитория**: `ssh://git@stash.delta.sbrf.ru:7999/infranas/deploy-mon-sh.git`
 
 ### 3. Запуск развертывания
 ```bash
