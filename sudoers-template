@@ -1,0 +1,117 @@
+# Monitoring deployment sudo rules with NOEXEC
+# Generated automatically - DO NOT EDIT MANUALLY
+# Все правила должны быть явными без переменных
+
+# ============================================
+# БАЗОВЫЕ КОМАНДЫ БЕЗ NOEXEC
+# ============================================
+
+# Проверка статуса сервисов (только проверка, без выполнения)
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl is-active prometheus
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl is-active grafana-server
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl is-active harvest
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl is-active vault-agent
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl is-enabled prometheus
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl is-enabled grafana-server
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl is-enabled harvest
+
+# Перезагрузка демона systemd
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
+
+# ============================================
+# КОМАНДЫ С NOEXEC ДЛЯ SYSTEMCTL STATUS
+# ============================================
+
+# Команды status с NOEXEC для предотвращения выполнения произвольного кода
+ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/wrappers/systemctl-wrapper.sh status prometheus
+ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/wrappers/systemctl-wrapper.sh status grafana-server
+ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/wrappers/systemctl-wrapper.sh status harvest
+ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/wrappers/systemctl-wrapper.sh status vault-agent
+
+# ============================================
+# СКРИПТЫ-ОБЕРТКИ ДЛЯ IPTABLES
+# ============================================
+
+# Правила для Prometheus (только localhost и IP сервера)
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh add-prometheus-rule 127.0.0.1 9090
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh check-rule 127.0.0.1 9090
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh add-prometheus-rule SERVER_IP 9090
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh check-rule SERVER_IP 9090
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh reject-rule 9090
+
+# Правила для Grafana
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh add-grafana-rule 3000
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh check-rule 3000
+
+# Правила для Harvest
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh add-harvest-rule 12990
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh check-rule 12990
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh add-harvest-rule 12991
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh check-rule 12991
+
+# Диапазон портов для Harvest
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh add-port-range 13000:14000
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/iptables-wrapper.sh check-rule 13000:14000
+
+# ============================================
+# СКРИПТЫ-ОБЕРТКИ ДЛЯ CURL
+# ============================================
+
+# RLM API операции
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/curl-wrapper.sh rlm-api-post https://simple-api.rlm.apps.prom-terra000049-ebm.ocp.sigma.sbrf.ru/api/tasks.json RLM_TOKEN PAYLOAD
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/curl-wrapper.sh rlm-api-get https://simple-api.rlm.apps.prom-terra000049-ebm.ocp.sigma.sbrf.ru/api/tasks/TASK_ID RLM_TOKEN
+
+# Загрузка RPM пакетов
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/curl-wrapper.sh download-rpm RPM_URL /opt/mon_distrib/mon_rpm_TIMESTAMP/package.rpm
+
+# ============================================
+# СКРИПТЫ-ОБЕРТКИ ДЛЯ ОПЕРАЦИЙ С ФАЙЛАМИ
+# ============================================
+
+# Создание конфигурационных файлов
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /etc/environment.d/99-monitoring-vars.conf CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /opt/vault/conf/agent.hcl CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /etc/grafana/grafana.ini CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /etc/prometheus/web-config.yml CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /etc/prometheus/prometheus.env CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /etc/profile.d/harvest.sh CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /opt/harvest/harvest.yml CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /etc/systemd/system/harvest.service CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /var/lib/monitoring_deployment_state CONTENT
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-file /etc/prometheus/prometheus.yml CONTENT
+
+# Создание директорий
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-directory /opt/mon_distrib/mon_rpm_TIMESTAMP
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-directory /opt/harvest/cert
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-directory /etc/grafana/cert
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh create-directory /etc/prometheus/cert
+
+# Изменение владельцев файлов
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh change-owner /etc/prometheus/prometheus.yml prometheus
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh change-owner /etc/grafana/grafana.ini grafana
+ALL=(ALL:ALL) NOPASSWD: /opt/monitoring/wrappers/file-operations-wrapper.sh change-owner /opt/harvest/harvest.yml harvest
+
+# ============================================
+# БАЗОВЫЕ КОМАНДЫ ДЛЯ РАБОТЫ СИСТЕМЫ
+# ============================================
+
+# Создание рабочих директорий
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/mkdir -p /opt/mon_distrib/mon_rpm_TIMESTAMP
+
+# Изменение прав доступа
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/chown -R prometheus:prometheus /etc/prometheus
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/chown -R grafana:grafana /etc/grafana
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/chmod 640 /etc/prometheus/*
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/chmod 640 /etc/grafana/*
+
+# Команды для работы с процессами (только для мониторинга)
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/ss -tln
+ALL=(ALL:ALL) NOPASSWD: /usr/bin/ss -tlnp
+
+# ============================================
+# ПРИМЕЧАНИЯ
+# ============================================
+
+# SERVER_IP, RLM_TOKEN, PAYLOAD, TASK_ID, RPM_URL, TIMESTAMP - будут заменены
+# на реальные значения во время выполнения скрипта развертывания
+# Все переменные проходят валидацию в скриптах-обертках

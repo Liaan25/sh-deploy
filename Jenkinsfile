@@ -116,8 +116,8 @@ pipeline {
                             GIT_SSH_COMMAND="ssh -i $BITBUCKET_SSH_KEY -o StrictHostKeyChecking=no" \
                             git clone ssh://git@stash.delta.sbrf.ru:7999/infranas/deploy-mon-sh.git monitoring-deployment
                             
-                            # Проверяем что репозиторий склонирован
-                            test -d monitoring-deployment && test -f monitoring-deployment/scripts/deploy_monitoring.sh
+                            # Проверяем что репозиторий склонирован и содержит основные файлы
+                            test -d monitoring-deployment && test -f monitoring-deployment/deploy_monitoring.sh
                         '''
                     }
                     
@@ -140,8 +140,8 @@ pipeline {
                         writeFile file: 'deploy_remote.sh', text: """#!/bin/bash
 set -e
 
-# Копируем проект на удаленный сервер
-scp -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no -r monitoring-deployment "\$SSH_USER"@${params.SERVER_ADDRESS}:/tmp/
+# Копируем все файлы проекта на удаленный сервер
+scp -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no -r monitoring-deployment/* "\$SSH_USER"@${params.SERVER_ADDRESS}:/tmp/monitoring-deployment/
 scp -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no temp_data_cred.json "\$SSH_USER"@${params.SERVER_ADDRESS}:/tmp/
 
 # Запускаем развертывание
@@ -167,10 +167,13 @@ RPM_GRAFANA=\$(jq -r '.rpm_url.grafana // empty' /tmp/temp_data_cred.json)
 RPM_PROMETHEUS=\$(jq -r '.rpm_url.prometheus // empty' /tmp/temp_data_cred.json)
 RPM_HARVEST=\$(jq -r '.rpm_url.harvest // empty' /tmp/temp_data_cred.json)
 
+# Создаем необходимые директории на удаленном сервере
+mkdir -p /tmp/monitoring-deployment/scripts
+
 # Запускаем скрипт развертывания
-cd /tmp/monitoring-deployment/scripts
-chmod +x deploy_monitoring.sh
-sudo -E ./deploy_monitoring.sh
+cd /tmp/monitoring-deployment
+chmod +x scripts/deploy_monitoring.sh
+sudo -E scripts/deploy_monitoring.sh
 
 REMOTE_EOF
 """

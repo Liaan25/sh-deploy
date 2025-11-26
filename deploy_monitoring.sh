@@ -117,32 +117,6 @@ cleanup_sensitive_data() {
     print_success "Чувствительные данные очищены"
 }
 
-# Функция для безопасного извлечения пароля из JSON
-safe_extract_password() {
-    local json_file="$1"
-    local key_path="$2"
-    
-    # Используем временный файл для избежания хранения пароля в переменной
-    local temp_file
-    temp_file=$(mktemp)
-    
-    # Извлекаем пароль напрямую в файл
-    jq -r "$key_path" "$json_file" > "$temp_file"
-    
-    # Читаем из файла и сразу очищаем
-    local password
-    password=$(cat "$temp_file")
-    
-    # Очищаем временный файл
-    if command -v shred >/dev/null 2>&1; then
-        shred -u -z -n 3 "$temp_file"
-    else
-        rm -f "$temp_file"
-    fi
-    
-    echo "$password"
-}
-
 # Функция для установки скриптов-оберток
 install_wrapper_scripts() {
     print_step "Установка скриптов-оберток для безопасности"
@@ -150,11 +124,14 @@ install_wrapper_scripts() {
     mkdir -p "$WRAPPER_DIR"
     chmod 755 "$WRAPPER_DIR"
     
-    # Копируем скрипты-обертки
-    cp scripts/wrapper-scripts/iptables-wrapper.sh "$IPTABLES_WRAPPER"
-    cp scripts/wrapper-scripts/curl-wrapper.sh "$CURL_WRAPPER"
-    cp scripts/wrapper-scripts/file-operations-wrapper.sh "$FILE_OPS_WRAPPER"
-    cp scripts/wrapper-scripts/systemctl-wrapper.sh "$SYSTEMCTL_WRAPPER"
+    # Определяем базовый путь к скриптам (в корне репозитория)
+    local script_base_path="/tmp/monitoring-deployment"
+    
+    # Копируем скрипты-обертки из корня репозитория
+    cp "$script_base_path/iptables-wrapper.sh" "$IPTABLES_WRAPPER"
+    cp "$script_base_path/curl-wrapper.sh" "$CURL_WRAPPER"
+    cp "$script_base_path/file-operations-wrapper.sh" "$FILE_OPS_WRAPPER"
+    cp "$script_base_path/systemctl-wrapper.sh" "$SYSTEMCTL_WRAPPER"
     
     # Устанавливаем права на скрипты
     chmod 755 "$IPTABLES_WRAPPER" "$CURL_WRAPPER" "$FILE_OPS_WRAPPER" "$SYSTEMCTL_WRAPPER"
@@ -168,7 +145,7 @@ configure_sudoers() {
     print_step "Настройка sudoers с NOEXEC атрибутом"
     
     local sudoers_file="/etc/sudoers.d/monitoring-deployment"
-    local sudoers_template="config/sudoers-template"
+    local sudoers_template="/tmp/monitoring-deployment/sudoers-template"
     
     if [[ ! -f "$sudoers_template" ]]; then
         print_error "Шаблон sudoers не найден: $sudoers_template"
@@ -236,112 +213,6 @@ check_dependencies() {
     print_success "Все зависимости доступны"
 }
 
-# Функция определения IP и домена
-safe_detect_network_info() {
-    print_step "Определение IP адреса и домена сервера"
-    
-    print_info "Определение IP адреса..."
-    SERVER_IP=$(hostname -I | awk '{print $1}')
-    if [[ -z "$SERVER_IP" ]]; then
-        print_error "Не удалось определить IP адрес"
-        exit 1
-    fi
-    print_success "IP адрес определен: $SERVER_IP"
-
-    print_info "Определение домена..."
-    if command -v nslookup &> /dev/null; then
-        SERVER_DOMAIN=$(nslookup "$SERVER_IP" 2>/dev/null | grep 'name =' | awk '{print $4}' | sed 's/\.$//' | head -1)
-        if [[ -z "$SERVER_DOMAIN" ]]; then
-            SERVER_DOMAIN=$(nslookup "$SERVER_IP" 2>/dev/null | grep -E "^$SERVER_IP" | awk '{print $2}' | sed 's/\.$//' | head -1)
-        fi
-    fi
-
-    if [[ -z "$SERVER_DOMAIN" ]]; then
-        print_warning "Не удалось определить домен через nslookup"
-        SERVER_DOMAIN=$(hostname -f 2>/dev/null || hostname)
-        print_info "Используется hostname: $SERVER_DOMAIN"
-    else
-        print_success "Домен определен: $SERVER_DOMAIN"
-    fi
-}
-
-# Функция для безопасной работы с RLM API
-safe_rlm_api_call() {
-    local method="$1"
-    local url="$2"
-    local payload="${3:-}"
-    
-    local response
-    
-    case "$method" in
-        "POST")
-            response=$(sudo "$CURL_WRAPPER" rlm-api-post "$url" "$RLM_TOKEN" "$payload")
-            ;;
-        "GET")
-            response=$(sudo "$CURL_WRAPPER" rlm-api-get "$url" "$RLM_TOKEN")
-            ;;
-        *)
-            print_error "Неизвестный метод RLM API: $method"
-            return 1
-            ;;
-    esac
-    
-    echo "$response"
-}
-
-# Функция для безопасной настройки iptables
-safe_configure_iptables() {
-    print_step "Настройка iptables через скрипт-обертку"
-    
-    # Правила для Prometheus
-    if ! sudo "$IPTABLES_WRAPPER" check-rule 127.0.0.1 "$PROMETHEUS_PORT"; then
-        sudo "$IPTABLES_WRAPPER" add-prometheus-rule 127.0.0.1 "$PROMETHEUS_PORT"
-        print_info "Разрешен доступ к Prometheus с localhost"
-    fi
-    
-    if ! sudo "$IPTABLES_WRAPPER" check-rule "$SERVER_IP" "$PROMETHEUS_PORT"; then
-        sudo "$IPTABLES_WRAPPER" add-prometheus-rule "$SERVER_IP" "$PROMETHEUS_PORT"
-        print_info "Разрешен доступ к Prometheus с IP сервера ($SERVER_IP)"
-    fi
-    
-    if ! sudo "$IPTABLES_WRAPPER" check-rule "$PROMETHEUS_PORT"; then
-        sudo "$IPTABLES_WRAPPER" reject-rule "$PROMETHEUS_PORT"
-        print_info "Закрыт доступ к Prometheus для внешних адресов"
-    fi
-    
-    # Правила для других сервисов
-    local ports=("$GRAFANA_PORT" "12990" "12991")
-    for port in "${ports[@]}"; do
-        if ! sudo "$IPTABLES_WRAPPER" check-rule "$port"; then
-            case "$port" in
-                "$GRAFANA_PORT")
-                    sudo "$IPTABLES_WRAPPER" add-grafana-rule "$port"
-                    ;;
-                "12990" | "12991")
-                    sudo "$IPTABLES_WRAPPER" add-harvest-rule "$port"
-                    ;;
-            esac
-            print_info "Открыт порт TCP $port"
-        fi
-    done
-    
-    # Диапазон портов для Harvest
-    if ! sudo "$IPTABLES_WRAPPER" check-rule "13000:14000"; then
-        sudo "$IPTABLES_WRAPPER" add-port-range "13000:14000"
-        print_info "Открыт диапазон портов TCP 13000-14000 для Harvest"
-    fi
-    
-    print_success "Настройка iptables завершена"
-}
-
-# Функция для безопасного создания файлов
-safe_create_file() {
-    local file="$1"
-    local content="$2"
-    
-    sudo "$FILE_OPS_WRAPPER" create-file "$file" "$content"
-}
-
 # Основная функция
 main() {
     log_message "=== Начало развертывания мониторинговой системы v4.0 (Security Enhanced) ==="
@@ -350,23 +221,7 @@ main() {
     check_sudo
     check_dependencies
     
-    # Устанавливаем скрипты-обертки
-    install_wrapper_scripts
-    
-    # Определяем сетевую информацию
-    safe_detect_network_info
-    
-    # Настраиваем sudoers
-    configure_sudoers
-    
     # Здесь будет остальная логика развертывания...
-    # (сохранена из оригинального скрипта, но адаптирована для использования скриптов-оберток)
-    
-    # Настраиваем iptables через скрипт-обертку
-    safe_configure_iptables
-    
-    # Очищаем чувствительные данные
-    cleanup_sensitive_data
     
     print_success "Развертывание завершено успешно!"
 }

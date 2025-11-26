@@ -1,12 +1,12 @@
 #!/bin/bash
 # Скрипт установки прав доступа для проекта мониторинга
-# Версия: 1.1 (обновлен для новой структуры)
+# Версия: 1.2 (обновлен для плоской структуры)
 
 set -euo pipefail
 
 echo "================================================="
 echo "Установка прав доступа для Monitoring Deployment"
-echo "Версия: Security Enhanced v4.0"
+echo "Версия: Security Enhanced v4.0 (Flat Structure)"
 echo "================================================="
 echo
 
@@ -39,12 +39,13 @@ set_permissions_recursive() {
     fi
 }
 
-echo "=== Установка прав на основные скрипты ==="
-set_permissions "scripts/deploy_monitoring.sh" "755"
+echo "=== Установка прав на основные скрипты в корне ==="
+set_permissions "deploy_monitoring.sh" "755"
+set_permissions "setup-permissions.sh" "755"
 
 echo
 echo "=== Установка прав на скрипты-обертки ==="
-set_permissions_recursive "scripts/wrapper-scripts" "*.sh" "755"
+set_permissions_recursive "." "*-wrapper.sh" "755"
 
 echo
 echo "=== Установка прав на скрипты валидации ==="
@@ -52,31 +53,24 @@ set_permissions_recursive "scripts/validation" "*.sh" "755"
 
 echo
 echo "=== Установка прав на конфигурационные файлы ==="
-set_permissions "config/sudoers-template" "644"
+set_permissions "sudoers-template" "644"
 set_permissions "Jenkinsfile" "644"
 set_permissions "README.md" "644"
-
-# Текущий скрипт
-set_permissions "setup-permissions.sh" "755"
 
 echo
 echo "================================================="
 echo "✅ Права доступа успешно установлены!"
 echo "================================================="
 echo
-echo "📋 Проверка структуры проекта:"
-find . -type f -name "*.sh" | head -10 | while read -r file; do
-    echo "  - $file"
+echo "📋 Структура проекта (плоская):"
+find . -maxdepth 1 -type f -name "*.sh" | while read -r file; do
+    echo "  - $(basename "$file")"
 done
 echo
 echo "🚀 Следующие шаги:"
-echo "1. Загрузите проект в Bitbucket"
+echo "1. Загрузите ВСЕ файлы из этой директории в Bitbucket"
 echo "2. Настройте pipeline в Jenkins с обновленным Jenkinsfile"
-echo "3. Убедитесь что credentials настроены правильно:"
-echo "   - bitbucket-ssh-dev-ift (для клонирования)"
-echo "   - mon-ssh-key-2 (для подключения к серверу)"
-echo "   - rlm-token (для RLM API)"
+echo "3. Убедитесь что credentials настроены правильно"
 echo "4. Запустите развертывание"
 echo
-echo "🔍 Для полной проверки прав выполните:"
-echo "find . -name '*.sh' -exec ls -la {} \; | head -20"
+echo "💡 Важно: Все файлы должны быть в корне репозитория!"
