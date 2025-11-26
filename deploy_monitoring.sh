@@ -142,9 +142,8 @@ install_wrapper_scripts() {
 
 # Функция для настройки sudoers с NOEXEC
 configure_sudoers() {
-    print_step "Настройка sudoers с NOEXEC атрибутом"
+    print_step "Подготовка шаблона sudoers для службы безопасности"
     
-    local sudoers_file="/etc/sudoers.d/monitoring-deployment"
     local sudoers_template="/tmp/monitoring-deployment/sudoers-template"
     
     if [[ ! -f "$sudoers_template" ]]; then
@@ -162,21 +161,16 @@ configure_sudoers() {
         -e "s/TIMESTAMP/$DATE_INSTALL/g" \
         "$sudoers_template" > "$temp_sudoers"
     
-    # Копируем в финальное местоположение
-    cp "$temp_sudoers" "$sudoers_file"
-    chmod 440 "$sudoers_file"
+    # Сохраняем подготовленный шаблон для службы безопасности
+    local security_sudoers="/tmp/monitoring-deployment-sudoers-prepared"
+    cp "$temp_sudoers" "$security_sudoers"
+    chmod 644 "$security_sudoers"
     
     # Очищаем временный файл
     rm -f "$temp_sudoers"
     
-    # Проверяем синтаксис sudoers
-    if visudo -c -f "$sudoers_file" >/dev/null 2>&1; then
-        print_success "Sudoers настроен с NOEXEC атрибутом"
-    else
-        print_error "Ошибка в синтаксисе sudoers файла"
-        rm -f "$sudoers_file"
-        return 1
-    fi
+    print_success "Шаблон sudoers подготовлен для службы безопасности: $security_sudoers"
+    print_info "Передайте этот файл службе безопасности для настройки прав"
 }
 
 # Функция проверки прав sudo
@@ -213,17 +207,70 @@ check_dependencies() {
     print_success "Все зависимости доступны"
 }
 
+# Функция для безопасной работы без sudo прав
+safe_execute_without_sudo() {
+    local command="$1"
+    local args="${@:2}"
+    
+    # Проверяем доступность команды без sudo
+    if command -v "$command" >/dev/null 2>&1; then
+        "$command" $args
+    else
+        print_error "Команда $command недоступна без sudo прав"
+        return 1
+    fi
+}
+
+# Функция для безопасной настройки iptables без sudo
+safe_configure_iptables_without_sudo() {
+    print_step "Проверка настроек iptables (без изменения)"
+    
+    # Только проверяем текущие правила, не изменяем их
+    print_info "Текущие правила iptables для мониторинговых портов:"
+    
+    local ports=("$PROMETHEUS_PORT" "$GRAFANA_PORT" "12990" "12991")
+    for port in "${ports[@]}"; do
+        if iptables -L INPUT -n | grep -q ":$port "; then
+            print_success "Порт $port открыт в iptables"
+        else
+            print_warning "Порт $port не открыт в iptables (требуется настройка службой безопасности)"
+        fi
+    done
+    
+    print_info "Для настройки iptables используйте подготовленный шаблон sudoers"
+}
+
 # Основная функция
 main() {
     log_message "=== Начало развертывания мониторинговой системы v4.0 (Security Enhanced) ==="
     
     print_header
-    check_sudo
+    
+    # Проверяем что мы не root (так как sudo будет настроен позже)
+    if [[ $EUID -eq 0 ]]; then
+        print_warning "Скрипт запущен с правами root"
+        print_info "Рекомендуется запускать без root, так как sudo будет настроен службой безопасности"
+    fi
+    
     check_dependencies
     
-    # Здесь будет остальная логика развертывания...
+    # Определяем сетевую информацию
+    safe_detect_network_info
     
-    print_success "Развертывание завершено успешно!"
+    # Устанавливаем скрипты-обертки (будут работать после настройки sudo)
+    install_wrapper_scripts
+    
+    # Подготавливаем шаблон sudoers для службы безопасности
+    configure_sudoers
+    
+    # Проверяем текущие настройки iptables (без изменения)
+    safe_configure_iptables_without_sudo
+    
+    # Здесь будет остальная логика развертывания для уже установленных сервисов...
+    
+    print_success "Предварительная настройка завершена!"
+    print_info "Для полного развертывания передайте подготовленный sudoers файл службе безопасности"
+    print_info "После настройки прав запустите скрипт снова для завершения развертывания"
 }
 
 # Запуск основной функции

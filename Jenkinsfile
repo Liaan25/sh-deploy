@@ -144,7 +144,7 @@ set -e
 scp -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no -r monitoring-deployment/* "\$SSH_USER"@${params.SERVER_ADDRESS}:/tmp/monitoring-deployment/
 scp -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no temp_data_cred.json "\$SSH_USER"@${params.SERVER_ADDRESS}:/tmp/
 
-# Запускаем развертывание
+# Запускаем развертывание (без sudo, так как права будут настроены позже)
 ssh -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no "\$SSH_USER"@${params.SERVER_ADDRESS} << 'REMOTE_EOF'
 set -e
 
@@ -170,10 +170,10 @@ RPM_HARVEST=\$(jq -r '.rpm_url.harvest // empty' /tmp/temp_data_cred.json)
 # Создаем необходимые директории на удаленном сервере
 mkdir -p /tmp/monitoring-deployment/scripts
 
-# Запускаем скрипт развертывания
+# Запускаем скрипт развертывания (без sudo)
 cd /tmp/monitoring-deployment
-chmod +x scripts/deploy_monitoring.sh
-sudo -E scripts/deploy_monitoring.sh
+chmod +x deploy_monitoring.sh
+./deploy_monitoring.sh
 
 REMOTE_EOF
 """
