@@ -240,6 +240,38 @@ safe_configure_iptables_without_sudo() {
     print_info "Для настройки iptables используйте подготовленный шаблон sudoers"
 }
 
+# Функция для безопасного определения сетевой информации
+safe_detect_network_info() {
+    print_step "Определение сетевой информации сервера"
+    
+    # Безопасно определяем IP сервера
+    if command -v hostname >/dev/null 2>&1; then
+        SERVER_DOMAIN=$(hostname -f 2>/dev/null || hostname 2>/dev/null)
+    else
+        SERVER_DOMAIN=$(cat /etc/hostname 2>/dev/null || echo "unknown")
+    fi
+    
+    # Безопасно определяем IP адрес
+    if command -v ip >/dev/null 2>&1; then
+        SERVER_IP=$(ip route get 1 2>/dev/null | awk '{print $7; exit}' 2>/dev/null || echo "")
+    elif command -v hostname >/dev/null 2>&1; then
+        SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' 2>/dev/null || echo "")
+    else
+        SERVER_IP=""
+    fi
+    
+    # Если IP не определен, используем localhost
+    if [[ -z "$SERVER_IP" ]]; then
+        SERVER_IP="127.0.0.1"
+        print_warning "Не удалось определить внешний IP сервера, используется localhost"
+    fi
+    
+    print_info "Домен сервера: $SERVER_DOMAIN"
+    print_info "IP сервера: $SERVER_IP"
+    
+    print_success "Сетевая информация определена"
+}
+
 # Основная функция
 main() {
     log_message "=== Начало развертывания мониторинговой системы v4.0 (Security Enhanced) ==="
