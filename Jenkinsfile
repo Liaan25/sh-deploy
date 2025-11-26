@@ -106,6 +106,12 @@ pipeline {
                     
                     withCredentials([sshUserPrivateKey(credentialsId: 'bitbucket-ssh-dev-ift', keyFileVariable: 'BITBUCKET_SSH_KEY', usernameVariable: 'BITBUCKET_SSH_USER')]) {
                         sh '''
+                            # Очищаем существующую директорию если есть
+                            if [ -d "monitoring-deployment" ]; then
+                                echo "[INFO] Удаляем существующую директорию monitoring-deployment"
+                                rm -rf monitoring-deployment
+                            fi
+                            
                             # Клонируем репозиторий
                             GIT_SSH_COMMAND="ssh -i $BITBUCKET_SSH_KEY -o StrictHostKeyChecking=no" \
                             git clone ssh://git@stash.delta.sbrf.ru:7999/infranas/deploy-mon-sh.git monitoring-deployment
