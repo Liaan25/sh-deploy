@@ -99,6 +99,27 @@ pipeline {
             }
         }
 
+        stage('Клонирование репозитория') {
+            steps {
+                script {
+                    echo "[STEP] Клонирование репозитория из Bitbucket"
+                    
+                    withCredentials([sshUserPrivateKey(credentialsId: 'bitbucket-ssh-dev-ift', keyFileVariable: 'BITBUCKET_SSH_KEY', usernameVariable: 'BITBUCKET_SSH_USER')]) {
+                        sh '''
+                            # Клонируем репозиторий
+                            GIT_SSH_COMMAND="ssh -i $BITBUCKET_SSH_KEY -o StrictHostKeyChecking=no" \
+                            git clone ssh://git@stash.delta.sbrf.ru:7999/infranas/deploy-monitoring.git monitoring-deployment
+                            
+                            # Проверяем что репозиторий склонирован
+                            test -d monitoring-deployment && test -f monitoring-deployment/scripts/deploy_monitoring.sh
+                        '''
+                    }
+                    
+                    echo "[SUCCESS] Репозиторий успешно клонирован"
+                }
+            }
+        }
+
         stage('Копирование проекта на сервер') {
             steps {
                 script {
