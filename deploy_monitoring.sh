@@ -121,23 +121,40 @@ cleanup_sensitive_data() {
 install_wrapper_scripts() {
     print_step "Установка скриптов-оберток для безопасности"
     
-    mkdir -p "$WRAPPER_DIR"
-    chmod 755 "$WRAPPER_DIR"
+    # Используем пользовательскую директорию вместо системной
+    local user_wrapper_dir="$HOME/.monitoring/wrappers"
     
-    # Определяем базовый путь к скриптам (в корне репозитория)
-    local script_base_path="/tmp/monitoring-deployment"
+    mkdir -p "$user_wrapper_dir"
+    chmod 755 "$user_wrapper_dir"
     
-    # Копируем скрипты-обертки из корня репозитория
-    cp "$script_base_path/iptables-wrapper.sh" "$IPTABLES_WRAPPER"
-    cp "$script_base_path/curl-wrapper.sh" "$CURL_WRAPPER"
-    cp "$script_base_path/file-operations-wrapper.sh" "$FILE_OPS_WRAPPER"
-    cp "$script_base_path/systemctl-wrapper.sh" "$SYSTEMCTL_WRAPPER"
+    # Определяем базовый путь к скриптам (относительно текущего скрипта)
+    local script_dir
+    script_dir=$(dirname "$(realpath "$0")")
+    local script_base_path="$script_dir/scripts/wrapper-scripts"
+    
+    # Проверяем существование скриптов
+    if [[ ! -f "$script_base_path/iptables-wrapper.sh" ]]; then
+        print_error "Скрипт iptables-wrapper.sh не найден по пути: $script_base_path"
+        return 1
+    fi
+    
+    # Копируем скрипты-обертки в пользовательскую директорию
+    cp "$script_base_path/iptables-wrapper.sh" "$user_wrapper_dir/iptables-wrapper.sh"
+    cp "$script_base_path/curl-wrapper.sh" "$user_wrapper_dir/curl-wrapper.sh"
+    cp "$script_base_path/file-operations-wrapper.sh" "$user_wrapper_dir/file-operations-wrapper.sh"
+    cp "$script_base_path/systemctl-wrapper.sh" "$user_wrapper_dir/systemctl-wrapper.sh"
     
     # Устанавливаем права на скрипты
-    chmod 755 "$IPTABLES_WRAPPER" "$CURL_WRAPPER" "$FILE_OPS_WRAPPER" "$SYSTEMCTL_WRAPPER"
-    chown root:root "$IPTABLES_WRAPPER" "$CURL_WRAPPER" "$FILE_OPS_WRAPPER" "$SYSTEMCTL_WRAPPER"
+    chmod 755 "$user_wrapper_dir/iptables-wrapper.sh" "$user_wrapper_dir/curl-wrapper.sh" "$user_wrapper_dir/file-operations-wrapper.sh" "$user_wrapper_dir/systemctl-wrapper.sh"
     
-    print_success "Скрипты-обертки установлены"
+    # Обновляем пути к скриптам-оберткам для использования пользовательской директории
+    IPTABLES_WRAPPER="$user_wrapper_dir/iptables-wrapper.sh"
+    CURL_WRAPPER="$user_wrapper_dir/curl-wrapper.sh"
+    FILE_OPS_WRAPPER="$user_wrapper_dir/file-operations-wrapper.sh"
+    SYSTEMCTL_WRAPPER="$user_wrapper_dir/systemctl-wrapper.sh"
+    
+    print_success "Скрипты-обертки установлены в пользовательскую директорию: $user_wrapper_dir"
+    print_info "После настройки sudo службой безопасности скрипты будут перемещены в системную директорию"
 }
 
 # Функция для настройки sudoers с NOEXEC
