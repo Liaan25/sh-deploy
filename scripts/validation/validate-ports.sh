@@ -61,3 +61,4 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     validate_port "$1"
     exit $?
 fi
+

@@ -196,6 +196,21 @@ check_dependencies() {
     print_success "Все зависимости доступны"
 }
 
+# Функция для проверки и установки рабочей директории
+ensure_working_directory() {
+    local target_dir="/tmp"
+    if ! pwd >/dev/null 2>&1; then
+        print_warning "Текущая директория недоступна, переключаемся на $target_dir"
+        cd "$target_dir" || {
+            print_error "Не удалось переключиться на $target_dir"
+            exit 1
+        }
+    fi
+    local current_dir
+    current_dir=$(pwd)
+    print_info "Текущая рабочая директория: $current_dir"
+}
+
 # Функция для установки скриптов-оберток
 install_wrapper_scripts() {
     print_step "Установка скриптов-оберток для безопасности"
@@ -286,6 +301,7 @@ safe_configure_iptables() {
 main() {
     log_message "=== Начало развертывания мониторинговой системы v4.0 (Security Enhanced - Full) ==="
     
+    ensure_working_directory
     print_header
     check_sudo
     check_dependencies

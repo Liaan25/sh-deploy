@@ -140,8 +140,11 @@ pipeline {
                         writeFile file: 'deploy_remote.sh', text: """#!/bin/bash
 set -e
 
+# Создаем директорию на удаленном сервере
+ssh -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no "\$SSH_USER"@${params.SERVER_ADDRESS} "mkdir -p /tmp/monitoring-deployment"
+
 # Копируем все файлы проекта на удаленный сервер
-scp -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no -r monitoring-deployment/* "\$SSH_USER"@${params.SERVER_ADDRESS}:/tmp/monitoring-deployment/
+scp -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no -r ./* "\$SSH_USER"@${params.SERVER_ADDRESS}:/tmp/monitoring-deployment/
 scp -i "\$SSH_KEY" -q -o StrictHostKeyChecking=no temp_data_cred.json "\$SSH_USER"@${params.SERVER_ADDRESS}:/tmp/
 
 # Запускаем развертывание (без sudo, так как права будут настроены позже)

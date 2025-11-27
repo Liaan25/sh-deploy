@@ -115,3 +115,4 @@ ALL=(ALL:ALL) NOPASSWD: /usr/bin/ss -tlnp
 # SERVER_IP, RLM_TOKEN, PAYLOAD, TASK_ID, RPM_URL, TIMESTAMP - будут заменены
 # на реальные значения во время выполнения скрипта развертывания
 # Все переменные проходят валидацию в скриптах-обертках
+

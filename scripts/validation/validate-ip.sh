@@ -55,3 +55,4 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     validate_ip "$1"
     exit $?
 fi
+
